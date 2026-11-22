@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#176b3a">
+  <title>ECO Delivery Admin</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#183326;background:#f3f7f3}*{box-sizing:border-box}
+    body{margin:0}header{background:#176b3a;color:#fff;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    h1{font-size:22px;margin:0}header p{margin:5px 0 0;font-size:13px;opacity:.9}
+    main{max-width:1100px;margin:22px auto;padding:0 14px}.panel{background:white;border:1px solid #dce8de;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 8px #153b1d0a}
+    h2{font-size:18px;margin:0 0 14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+    label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}input,textarea,select{width:100%;padding:11px;border:1px solid #cbd9ce;border-radius:8px;font:inherit;background:#fff}
+    textarea{min-height:72px;resize:vertical}.field{margin-bottom:11px}
+    button{border:0;border-radius:8px;padding:11px 16px;background:#176b3a;color:#fff;font-weight:700;cursor:pointer}
+    button.secondary{background:#e7f1e9;color:#176b3a}button.danger{background:#a52b2b}button:disabled{opacity:.5;cursor:not-allowed}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.hidden{display:none!important}.muted{color:#617368;font-size:13px}
+    .msg{margin:10px 0;padding:10px;border-radius:8px;background:#fff4d9;color:#694d00;font-size:14px}
+    .order{border:1px solid #e0e9e2;border-radius:10px;padding:13px;margin-top:10px;display:grid;grid-template-columns:1fr auto;gap:12px}
+    .order strong{display:block;margin-bottom:5px}.pill{display:inline-block;background:#e7f1e9;color:#176b3a;border-radius:30px;padding:4px 9px;font-size:12px;font-weight:700}
+    .topline{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+    @media(max-width:600px){.order{grid-template-columns:1fr}.order .actions button{flex:1}}
+  </style>
+</head>
+<body>
+<header><div><h1>🥬 ECO Delivery Admin</h1><p>Manage delivery partners and grocery orders</p></div><button id="logout" class="secondary hidden">Sign out</button></header>
+<main>
+  <section id="loginPanel" class="panel">
+    <h2>Admin login</h2><p class="muted">Sign in with the admin email and password you created in Firebase Authentication.</p>
+    <form id="loginForm"><div class="field"><label for="email">Email</label><input id="email" type="email" required autocomplete="username"></div>
+    <div class="field"><label for="password">Password</label><input id="password" type="password" required autocomplete="current-password"></div>
+    <button type="submit">Sign in</button></form><div id="loginMessage" class="msg hidden"></div>
+  </section>
+  <div id="appPanel" class="hidden">
+    <section class="panel"><div class="topline"><h2>Welcome to your admin panel</h2><span class="pill">Admin access</span></div><p class="muted">Orders entered here are saved in your Firebase database. The demo Android app is not connected yet; we will connect it in a later step.</p></section>
+    <section class="panel"><h2>Add delivery partner</h2>
+      <form id="partnerForm" class="grid">
+        <div class="field"><label for="partnerName">Partner name</label><input id="partnerName" required></div>
+        <div class="field"><label for="partnerPhone">Mobile number</label><input id="partnerPhone" inputmode="numeric" required></div>
+        <div class="field"><label for="partnerArea">Area / city</label><input id="partnerArea" placeholder="e.g. Patna"></div>
+        <div class="field actions" style="align-items:end"><button type="submit">Save partner</button></div>
+      </form><div id="partnerMessage" class="muted"></div>
+      <div id="partnerList" class="muted"></div>
+    </section>
+    <section class="panel"><h2>Add new order</h2>
+      <form id="orderForm">
+        <div class="grid">
+          <div class="field"><label for="customerName">Customer name</label><input id="customerName" required></div>
+          <div class="field"><label for="customerPhone">Customer mobile</label><input id="customerPhone" inputmode="tel" required></div>
+          <div class="field"><label for="orderAmount">Order amount (₹)</label><input id="orderAmount" type="number" min="0" step="0.01" required></div>
+          <div class="field"><label for="deliveryFee">Delivery fee (₹)</label><input id="deliveryFee" type="number" min="0" step="0.01" value="40"></div>
+        </div>
+        <div class="field"><label for="customerAddress">Delivery address</label><textarea id="customerAddress" required></textarea></div>
+        <div class="grid">
+          <div class="field"><label for="assignedPartner">Assign delivery partner</label><select id="assignedPartner"><option value="">Unassigned</option></select></div>
+          <div class="field"><label for="orderNotes">Order notes (optional)</label><input id="orderNotes"></div>
+        </div>
+        <button type="submit">Save order</button><span id="orderMessage" class="muted" style="margin-left:10px"></span>
+      </form>
+    </section>
+    <section class="panel"><div class="topline"><h2>Orders</h2><span id="orderCount" class="pill">0 orders</span></div>
+      <div class="grid"><div class="field"><label for="statusFilter">Filter by status</label><select id="statusFilter"><option value="All">All orders</option><option>New</option><option>Assigned</option><option>Picked up</option><option>Out for delivery</option><option>Delivered</option><option>Cancelled</option></select></div></div>
+      <div id="ordersList"><p class="muted">Loading orders…</p></div>
+    </section>
+  </div>
+</main>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+  import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCDvNQC-xgfw9S6ZIMwgRsOi2rfi8_V4Bk",
+    authDomain: "eco-delivery-admin.firebaseapp.com",
+    projectId: "eco-delivery-admin",
+    storageBucket: "eco-delivery-admin.firebasestorage.app",
+    messagingSenderId: "1023900178515",
+    appId: "1:1023900178515:web:28ac20f564ed4156284ea6",
+    measurementId: "G-TZYFVR7SXK"
+  };
+  const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app);
+  const $ = id => document.getElementById(id);
+  let partners = [], orders = [], stopPartners = null, stopOrders = null;
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  $("loginForm").addEventListener("submit", async e => {
+    e.preventDefault(); $("loginMessage").classList.add("hidden");
+    try { await signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value); }
+    catch(err) { $("loginMessage").textContent = err.message; $("loginMessage").classList.remove("hidden"); }
+  });
+  $("logout").addEventListener("click", () => signOut(auth));
+  onAuthStateChanged(auth, user => {
+    const allowedAdminUid = "2lL6DiJ63ydEXVTy3taJorg9ps53";
+    if (user && user.uid === allowedAdminUid) {
+      $("loginPanel").classList.add("hidden"); $("appPanel").classList.remove("hidden"); $("logout").classList.remove("hidden"); startData();
+    } else {
+      if (user) signOut(auth);
+      stopPartners?.(); stopOrders?.(); $("appPanel").classList.add("hidden"); $("loginPanel").classList.remove("hidden"); $("logout").classList.add("hidden");
+    }
+  });
+  function startData() {
+    stopPartners?.(); stopOrders?.();
+    stopPartners = onSnapshot(collection(db,"partners"), snap => {
+      partners = snap.docs.map(d => ({id:d.id,...d.data()}));
+      $("assignedPartner").innerHTML = '<option value="">Unassigned</option>' + partners.map(p => '<option value="'+esc(p.id)+'">'+esc(p.name)+' — '+esc(p.phone)+'</option>').join("");
+      $("partnerList").innerHTML = partners.length ? '<p><b>Saved partners:</b> '+partners.map(p=>esc(p.name)+' ('+esc(p.phone)+')').join(" · ")+'</p>' : '<p>No partners added yet.</p>';
+      renderOrders();
+    }, showError);
+    stopOrders = onSnapshot(query(collection(db,"orders"),orderBy("createdAt","desc")), snap => {
+      orders = snap.docs.map(d => ({id:d.id,...d.data()})); renderOrders();
+    }, showError);
+  }
+  function showError(err) { $("orderMessage").textContent = err.message; }
+  $("partnerForm").addEventListener("submit", async e => {
+    e.preventDefault(); const btn=e.submitter; btn.disabled=true;
+    try {
+      await addDoc(collection(db,"partners"),{name:$("partnerName").value.trim(),phone:$("partnerPhone").value.trim(),area:$("partnerArea").value.trim(),createdAt:serverTimestamp(),active:true});
+      e.target.reset(); $("partnerMessage").textContent="Partner saved successfully.";
+    } catch(err) {$("partnerMessage").textContent=err.message;} finally {btn.disabled=false;}
+  });
+  $("orderForm").addEventListener("submit", async e => {
+    e.preventDefault(); const btn=e.submitter; btn.disabled=true; $("orderMessage").textContent="Saving…";
+    const partner=partners.find(p=>p.id===$("assignedPartner").value);
+    try {
+      await addDoc(collection(db,"orders"),{
+        customerName:$("customerName").value.trim(),customerPhone:$("customerPhone").value.trim(),
+        address:$("customerAddress").value.trim(),amount:Number($("orderAmount").value),
+        deliveryFee:Number($("deliveryFee").value||0),notes:$("orderNotes").value.trim(),
+        partnerId:partner?.id||null,partnerName:partner?.name||"",status:partner?"Assigned":"New",
+        createdAt:serverTimestamp()
+      });
+      e.target.reset(); $("deliveryFee").value="40"; $("orderMessage").textContent="Order saved successfully.";
+    } catch(err) {$("orderMessage").textContent=err.message;} finally {btn.disabled=false;}
+  });
+  $("statusFilter").addEventListener("change",renderOrders);
+  function renderOrders() {
+    const filter=$("statusFilter").value, shown=orders.filter(o=>filter==="All"||o.status===filter);
+    $("orderCount").textContent=orders.length+" orders";
+    $("ordersList").innerHTML=shown.length?shown.map(o=>`
+      <article class="order"><div><strong>${esc(o.customerName)} <span class="pill">${esc(o.status||"New")}</span></strong>
+      <div class="muted">Order ${esc(o.id.slice(-7))} · ${esc(o.customerPhone)}</div>
+      <p>${esc(o.address)}</p><div><b>₹${Number(o.amount||0).toFixed(2)}</b> · Delivery ₹${Number(o.deliveryFee||0).toFixed(2)}</div>
+      <div class="muted">Partner: ${esc(o.partnerName||"Not assigned")} ${o.notes?"· "+esc(o.notes):""}</div></div>
+      <div class="actions"><select aria-label="Update order status" data-status="${esc(o.id)}">
+        ${["New","Assigned","Picked up","Out for delivery","Delivered","Cancelled"].map(s=>'<option '+(s===o.status?'selected':'')+'>'+s+'</option>').join("")}
+      </select><button data-save="${esc(o.id)}">Update</button></div></article>`).join(""):'<p class="muted">No orders found.</p>';
+    $("ordersList").querySelectorAll("[data-save]").forEach(btn=>btn.addEventListener("click",async()=>{
+      const id=btn.dataset.save, select=$("ordersList").querySelector('[data-status="'+CSS.escape(id)+'"]');
+      btn.disabled=true; try{await updateDoc(doc(db,"orders",id),{status:select.value});}catch(err){alert(err.message);}finally{btn.disabled=false;}
+    }));
+  }
+</script>
+</body>
+</html>
