@@ -13,4 +13,19 @@ android {
         versionCode 1
         versionName '1.0'
     }
+
+    signingConfigs {
+        release {
+            storeFile file('eco-upload.jks')
+            storePassword System.getenv('KEYSTORE_PASSWORD')
+            keyAlias 'eco-upload'
+            keyPassword System.getenv('KEY_PASSWORD')
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
+    }
 }
